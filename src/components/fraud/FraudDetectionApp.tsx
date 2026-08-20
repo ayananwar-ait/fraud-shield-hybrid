@@ -523,16 +523,16 @@ function AnalyzerAndAbout() {
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             <Field label="Transaction Amount ($)">
-              <Input type="number" value={form.amount} onChange={(e) => set("amount")(e.target.value)} />
+              <Input type="number" placeholder="e.g. 1250" value={form.amount} onChange={(e) => set("amount")(e.target.value)} />
             </Field>
             <Field label="Merchant Name">
-              <Input value={form.merchant} onChange={(e) => set("merchant")(e.target.value)} />
+              <Input placeholder="e.g. Amazon" value={form.merchant} onChange={(e) => set("merchant")(e.target.value)} />
             </Field>
             <Field label="Transaction Location">
-              <Input value={form.location} onChange={(e) => set("location")(e.target.value)} />
+              <Input placeholder="e.g. New York, US" value={form.location} onChange={(e) => set("location")(e.target.value)} />
             </Field>
             <Field label="Time of Transaction">
-              <Sel value={form.time} onChange={set("time")} options={[
+              <Sel value={form.time} onChange={set("time")} placeholder="Select time window" options={[
                 ["business", "Business Hours (9am–5pm)"],
                 ["evening", "Evening (5pm–11pm)"],
                 ["late_night", "Late Night (11pm–4am)"],
@@ -540,10 +540,10 @@ function AnalyzerAndAbout() {
               ]} />
             </Field>
             <Field label="Account Age (months)">
-              <Input type="number" value={form.age} onChange={(e) => set("age")(e.target.value)} />
+              <Input type="number" placeholder="e.g. 8" value={form.age} onChange={(e) => set("age")(e.target.value)} />
             </Field>
             <Field label="Previous Fraud Flags">
-              <Sel value={form.prevFlags} onChange={set("prevFlags")} options={[
+              <Sel value={form.prevFlags} onChange={set("prevFlags")} placeholder="Select flag history" options={[
                 ["0", "None"],
                 ["1", "1 previous flag"],
                 ["2", "2 previous flags"],
@@ -551,7 +551,7 @@ function AnalyzerAndAbout() {
               ]} />
             </Field>
             <Field label="Transactions in Last Hour (velocity)" className="md:col-span-2">
-              <Input type="number" value={form.velocity} onChange={(e) => set("velocity")(e.target.value)} />
+              <Input type="number" placeholder="e.g. 4" value={form.velocity} onChange={(e) => set("velocity")(e.target.value)} />
             </Field>
           </div>
 
@@ -692,10 +692,10 @@ function Field({ label, children, className }: { label: string; children: React.
   );
 }
 
-function Sel({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: [string, string][] }) {
+function Sel({ value, onChange, options, placeholder }: { value: string; onChange: (v: string) => void; options: [string, string][]; placeholder?: string }) {
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger><SelectValue /></SelectTrigger>
+      <SelectTrigger><SelectValue placeholder={placeholder} /></SelectTrigger>
       <SelectContent>
         {options.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
       </SelectContent>
