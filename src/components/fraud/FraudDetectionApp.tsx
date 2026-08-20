@@ -306,8 +306,9 @@ function makeTx(): Tx {
 }
 
 function LiveFeed() {
-  const [rows, setRows] = useState<Tx[]>(() => Array.from({ length: 8 }, makeTx));
+  const [rows, setRows] = useState<Tx[]>([]);
   useEffect(() => {
+    setRows(Array.from({ length: 8 }, makeTx));
     const id = setInterval(() => {
       setRows((prev) => {
         const next = [makeTx(), ...prev.slice(0, 7)];
