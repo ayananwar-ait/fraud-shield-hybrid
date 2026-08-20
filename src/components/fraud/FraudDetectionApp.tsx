@@ -306,8 +306,9 @@ function makeTx(): Tx {
 }
 
 function LiveFeed() {
-  const [rows, setRows] = useState<Tx[]>(() => Array.from({ length: 8 }, makeTx));
+  const [rows, setRows] = useState<Tx[]>([]);
   useEffect(() => {
+    setRows(Array.from({ length: 8 }, makeTx));
     const id = setInterval(() => {
       setRows((prev) => {
         const next = [makeTx(), ...prev.slice(0, 7)];
@@ -415,13 +416,13 @@ interface FormState {
   velocity: string;
 }
 const defaults: FormState = {
-  amount: "1250",
-  merchant: "Amazon",
-  location: "New York, US",
-  time: "business",
-  age: "8",
-  prevFlags: "0",
-  velocity: "4",
+  amount: "",
+  merchant: "",
+  location: "",
+  time: "",
+  age: "",
+  prevFlags: "",
+  velocity: "",
 };
 
 function score(f: FormState) {
@@ -430,24 +431,60 @@ function score(f: FormState) {
   const age = +f.age || 0;
   const flags = +f.prevFlags || 0;
   const vel = +f.velocity || 0;
+  const reasons: { label: string; detail: string; weight: number }[] = [];
+  const add = (weight: number, label: string, detail: string) => {
+    if (weight <= 0) return;
+    s += weight;
+    reasons.push({ label, detail, weight: Math.round(weight) });
+  };
 
-  s += Math.min(35, amt / 400);
-  s += age < 3 ? 18 : age < 12 ? 7 : 0;
-  s += Math.min(22, vel * 2.5);
-  s += flags * 12;
-  if (f.time === "late_night") s += 16;
-  if (f.time === "evening") s += 4;
-  if (/unknown/i.test(f.merchant)) s += 14;
-  s += Math.random() * 6 - 3;
+  const amtW = Math.min(35, amt / 400);
+  add(amtW, "Transaction amount", amt >= 5000 ? `$${amt.toLocaleString()} is far above the typical spend profile` : `$${amt.toLocaleString()} raises the value-based anomaly score (Z-Score layer)`);
+  add(age < 3 ? 18 : age < 12 ? 7 : 0, "Account age", age < 3 ? `Account is only ${age} month(s) old — new accounts carry elevated risk` : `Account age of ${age} months is still below the trusted threshold`);
+  add(Math.min(22, vel * 2.5), "Velocity", `${vel} transactions in the last hour flagged by CUSUM change-point detection`);
+  add(flags * 12, "Historical fraud flags", `${flags} previous fraud flag(s) on this account`);
+  if (f.time === "late_night") add(16, "Time of transaction", "Late-night activity (11pm–4am) deviates from the account's normal pattern");
+  else if (f.time === "evening") add(4, "Time of transaction", "Evening activity slightly outside the usual window");
+  if (/unknown/i.test(f.merchant)) add(14, "Merchant reputation", `"${f.merchant}" has no established trust history`);
+  if (reasons.length === 0) {
+    reasons.push({ label: "No anomalies detected", detail: "All statistical and ML signals fall within normal behavioural bounds", weight: 0 });
+  }
+
   s = Math.max(2, Math.min(99, s));
 
-  const confidence = Math.round(83 + Math.random() * 14);
+  const confidence = Math.round(Math.min(98, 84 + Math.abs(s - 50) / 4));
   const level = s < 35 ? "Low" : s < 70 ? "Medium" : "High";
   const action =
     s < 35 ? "Approve transaction"
       : s < 70 ? "Send for manual review"
       : "Block and alert team";
-  return { score: Math.round(s), confidence, level, action };
+  const recommendations =
+    s < 35
+      ? [
+          "Auto-approve and settle in real time",
+          "Log features to the adaptive learning buffer",
+          "No customer friction required",
+        ]
+      : s < 70
+        ? [
+            "Route to manual review queue within 60 seconds",
+            "Trigger step-up authentication (OTP / biometric)",
+            "Temporarily lower the account's velocity limit",
+          ]
+        : [
+            "Block the transaction immediately",
+            "Freeze the card and notify the cardholder",
+            "Escalate to the fraud operations team for investigation",
+            "Add device and IP fingerprint to the watchlist",
+          ];
+  return {
+    score: Math.round(s),
+    confidence,
+    level,
+    action,
+    reasons: reasons.sort((a, b) => b.weight - a.weight),
+    recommendations,
+  };
 }
 
 function AnalyzerAndAbout() {
@@ -457,6 +494,10 @@ function AnalyzerAndAbout() {
   const set = (k: keyof FormState) => (v: string) => setForm((s) => ({ ...s, [k]: v }));
 
   const analyze = () => {
+    if (!form.amount || !form.merchant || !form.location || !form.time || !form.age || !form.prevFlags || !form.velocity) {
+      toast.error("Please fill in all transaction details before analyzing.");
+      return;
+    }
     setLoading(true);
     setResult(null);
     // Placeholder for real ML API: fetch("/api/public/predict", { method: "POST", body: JSON.stringify(form) })
@@ -482,16 +523,16 @@ function AnalyzerAndAbout() {
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             <Field label="Transaction Amount ($)">
-              <Input type="number" value={form.amount} onChange={(e) => set("amount")(e.target.value)} />
+              <Input type="number" placeholder="e.g. 1250" value={form.amount} onChange={(e) => set("amount")(e.target.value)} />
             </Field>
             <Field label="Merchant Name">
-              <Input value={form.merchant} onChange={(e) => set("merchant")(e.target.value)} />
+              <Input placeholder="e.g. Amazon" value={form.merchant} onChange={(e) => set("merchant")(e.target.value)} />
             </Field>
             <Field label="Transaction Location">
-              <Input value={form.location} onChange={(e) => set("location")(e.target.value)} />
+              <Input placeholder="e.g. New York, US" value={form.location} onChange={(e) => set("location")(e.target.value)} />
             </Field>
             <Field label="Time of Transaction">
-              <Sel value={form.time} onChange={set("time")} options={[
+              <Sel value={form.time} onChange={set("time")} placeholder="Select time window" options={[
                 ["business", "Business Hours (9am–5pm)"],
                 ["evening", "Evening (5pm–11pm)"],
                 ["late_night", "Late Night (11pm–4am)"],
@@ -499,10 +540,10 @@ function AnalyzerAndAbout() {
               ]} />
             </Field>
             <Field label="Account Age (months)">
-              <Input type="number" value={form.age} onChange={(e) => set("age")(e.target.value)} />
+              <Input type="number" placeholder="e.g. 8" value={form.age} onChange={(e) => set("age")(e.target.value)} />
             </Field>
             <Field label="Previous Fraud Flags">
-              <Sel value={form.prevFlags} onChange={set("prevFlags")} options={[
+              <Sel value={form.prevFlags} onChange={set("prevFlags")} placeholder="Select flag history" options={[
                 ["0", "None"],
                 ["1", "1 previous flag"],
                 ["2", "2 previous flags"],
@@ -510,29 +551,68 @@ function AnalyzerAndAbout() {
               ]} />
             </Field>
             <Field label="Transactions in Last Hour (velocity)" className="md:col-span-2">
-              <Input type="number" value={form.velocity} onChange={(e) => set("velocity")(e.target.value)} />
+              <Input type="number" placeholder="e.g. 4" value={form.velocity} onChange={(e) => set("velocity")(e.target.value)} />
             </Field>
           </div>
 
-          <div className="mt-6 flex items-center justify-between gap-4">
-            <div className="min-h-[44px] flex-1">
-              {result && (
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <RiskCell risk={result.score} />
-                  <span className="text-muted-foreground">·</span>
-                  <StatusPill status={result.score > 70 ? "blocked" : result.score > 35 ? "flagged" : "legitimate"} />
-                  <span className="text-muted-foreground">·</span>
-                  <span className="text-muted-foreground">Confidence</span>
-                  <span className="font-mono font-semibold text-primary">{result.confidence}%</span>
-                  <span className="text-muted-foreground">·</span>
-                  <span className="font-medium">{result.action}</span>
-                </div>
-              )}
-            </div>
+          <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
+            {result && (
+              <Button variant="outline" size="lg" onClick={() => { setForm(defaults); setResult(null); }}>
+                Reset
+              </Button>
+            )}
             <Button onClick={analyze} variant="hero" size="lg" disabled={loading}>
               {loading ? "Analyzing…" : (<><Zap className="h-4 w-4" /> Analyze Transaction</>)}
             </Button>
           </div>
+
+          {result && (
+            <div className="mt-6 space-y-5 rounded-xl border border-border bg-secondary/30 p-5 animate-[fadeUp_0.4s_ease-out]">
+              <div className="flex flex-wrap items-center gap-3 text-xs">
+                <span className="text-muted-foreground">Risk score</span>
+                <RiskCell risk={result.score} />
+                <StatusPill status={result.score > 70 ? "blocked" : result.score > 35 ? "flagged" : "legitimate"} />
+                <span className="text-muted-foreground">Confidence</span>
+                <span className="font-mono font-semibold text-primary">{result.confidence}%</span>
+                <span className="rounded-full border border-border px-2 py-0.5 font-medium">{result.level} risk</span>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <AlertTriangle className="h-4 w-4 text-primary" />
+                  Why this score? (explainability)
+                </div>
+                <ul className="mt-2 space-y-2">
+                  {result.reasons.map((r) => (
+                    <li key={r.label} className="rounded-lg border border-border bg-card px-3 py-2">
+                      <div className="flex items-center justify-between gap-3 text-xs font-medium">
+                        <span>{r.label}</span>
+                        {r.weight > 0 && (
+                          <span className="font-mono text-[11px] text-primary">+{r.weight} pts</span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-[11px] text-muted-foreground">{r.detail}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
+                  Recommended action — {result.action}
+                </div>
+                <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                  {result.recommendations.map((r) => (
+                    <li key={r} className="flex gap-2">
+                      <span className="text-primary">›</span>
+                      <span>{r}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
         </div>
       </Reveal>
 
@@ -612,10 +692,10 @@ function Field({ label, children, className }: { label: string; children: React.
   );
 }
 
-function Sel({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: [string, string][] }) {
+function Sel({ value, onChange, options, placeholder }: { value: string; onChange: (v: string) => void; options: [string, string][]; placeholder?: string }) {
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger><SelectValue /></SelectTrigger>
+      <SelectTrigger><SelectValue placeholder={placeholder} /></SelectTrigger>
       <SelectContent>
         {options.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
       </SelectContent>
