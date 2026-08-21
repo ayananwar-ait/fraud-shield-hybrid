@@ -1,4 +1,4 @@
-# Fraud Sentinel
+# Fraud Sentinell
 
 Create a modern, AI-powered research project website for my paper titled:
 
